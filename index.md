@@ -1,5 +1,1 @@
-## Android tips
-
-All discussed subjects :
-
-1. [Handle progression on configuration change](handle_progression.md)
+{% include_relative _posts/2017-10-14-handle-progression.markdown %}
