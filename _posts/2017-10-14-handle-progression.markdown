@@ -1,4 +1,4 @@
-## Handle progression on configuration change
+# Handle progression on configuration change
 
 A very common issue for Android developpers is to display a progression with a `ProgressBar` within an Activity or Fragment, and make it work properly on configuration change (for example screen orientation change).
 Why so ?
