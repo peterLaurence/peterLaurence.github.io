@@ -1,1 +1,11 @@
-{% include_relative _posts/2017-10-14-handle-progression.markdown %}
+# Summary of my posts
+
+
+<ul>
+  {% for post in site.posts %}
+    <li>
+      <a href="{{ post.url }}">{{ post.title }}</a>
+    </li>
+  {% endfor %}
+</ul>
+
