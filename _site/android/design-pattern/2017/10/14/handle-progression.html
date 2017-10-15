@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+
+<!-- Begin Jekyll SEO tag v2.3.0 -->
+<title>Handle progression on configuration change | Android tips</title>
+<meta property="og:title" content="Handle progression on configuration change" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Handle progression on configuration change" />
+<meta property="og:description" content="Handle progression on configuration change" />
+<link rel="canonical" href="http://localhost:4000/android/design-pattern/2017/10/14/handle-progression.html" />
+<meta property="og:url" content="http://localhost:4000/android/design-pattern/2017/10/14/handle-progression.html" />
+<meta property="og:site_name" content="Android tips" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2017-10-14T00:00:00+02:00" />
+<script type="application/ld+json">
+{"name":null,"description":"Handle progression on configuration change","author":null,"@type":"BlogPosting","url":"http://localhost:4000/android/design-pattern/2017/10/14/handle-progression.html","publisher":null,"image":null,"headline":"Handle progression on configuration change","dateModified":"2017-10-14T00:00:00+02:00","datePublished":"2017-10-14T00:00:00+02:00","sameAs":null,"mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/android/design-pattern/2017/10/14/handle-progression.html"},"@context":"http://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <meta name="description" content="My experience shares with Android"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#157878">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="/assets/css/style.css?v=8d446725ecb707f41a0d71eb9740a7eaa8877b50">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Android tips</h1>
+      <h2 class="project-tagline">My experience shares with Android</h2>
+      
+        <a href="http://github.com/peterLaurence/peterLaurence.github.io" class="btn">View on GitHub</a>
+      
+      
+    </section>
+
+    <section class="main-content">
+      <h1 id="handle-progression-on-configuration-change">Handle progression on configuration change</h1>
+
+<p>A very common issue for Android developpers is to display a progression with a <code class="highlighter-rouge">ProgressBar</code> within an Activity or Fragment, and make it work properly on configuration change (for example screen orientation change).
+Why so ?
+Well, if things aren’t done properly, when the screen is rotated, you might end up with the following issues :</p>
+
+<ul>
+  <li>The progression stops</li>
+  <li>The Activity/Fragment hangs while the task is running</li>
+  <li>You might not even notice that behind the scene you are leaking an Activity</li>
+</ul>
+
+<h2 id="a-short-explanation">A short explanation</h2>
+
+<p>By default, on configuration change,  an Android application has its main activity recreated. This is also the case for Fragments that are not retained. <br />
+This has a lot of consequences because the developper has to keep in mind that every view can be destroyed at any time (e.g. the user rotates the screen).</p>
+
+<p><em>What? You know you can prevent the activity from being re-created…</em></p>
+
+<p>If you’re thinking about this :</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>&lt;activity android:name=".MyActivity"
+          android:configChanges="orientation|keyboardHidden"
+          android:label="@string/app_name"&gt;
+</code></pre>
+</div>
+
+<p><a href="https://developer.android.com/guide/topics/resources/runtime-changes.html#HandlingTheChange">This</a> explains why it isn’t recommended. <br /></p>
+
+<p>So yes, the spirit is to follow Android official guidelines.</p>
+
+<h2 id="an-example-of-mistake">An example of mistake</h2>
+
+<p>Say we want to show a progress from 0 to 100% using a <code class="highlighter-rouge">ProgressBar</code>. We could do something like this :</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>public class AsyncActivity extends Activity {
+
+    ProgressBar mProgressBar;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_async);
+        mProgressBar = (ProgressBar) findViewById(R.id.progress_id);
+
+        AsyncTask task = new BackgroundTask(mProgressBar).execute();
+    }
+}
+</code></pre>
+</div>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>public class BackgroundTask extends AsyncTask&lt;Void, Void, Integer&gt; {
+    private final WeakReference&lt;ProgressBar&gt; mProgressBarReference;
+
+    public BackgroundTask(ProgressBar progressBar) {
+        mProgressBarReference = new WeakReference&lt;&gt;(progressBar);
+    }
+
+    @Override
+    protected Integer doInBackground(Void... params) {
+        // Do background work. Code omitted.
+	return progress;
+    }
+
+    @Override
+    protected void onPostExecute(Integer progress) {
+        ProgressBar view = mProgressBarReference.get();
+	if (view != null) {
+            view.setProgress(result);
+	}
+    }
+}
+</code></pre>
+</div>
+
+<p>Here, the use of a <code class="highlighter-rouge">WeakReference</code> is to avoid a strong reference on a <code class="highlighter-rouge">ProgressBar</code> 
+which has a reference on the activity <code class="highlighter-rouge">Context</code>. That way, the <code class="highlighter-rouge">BackgroundTask</code> won’t
+prevent the activty from being garbage collected.<br />
+But if the user rotates the screen in the middle of the progression, the activity will
+be destroyed and re-created – so as the <code class="highlighter-rouge">ProgressBar</code>. Consequently, in the
+<code class="highlighter-rouge">BackgroundTask</code>, <code class="highlighter-rouge">mProgressBarReference.get()</code> returns <code class="highlighter-rouge">null</code>, and our progression
+stops.</p>
+
+<p>Now if we want the <code class="highlighter-rouge">ProgressBar</code> to continue, there are other ways to achieve this, with
+a background service and a broadcast receiver for example. But what if we want to keep things
+simple, and not rely on services which are very resource demanding compared to bare <code class="highlighter-rouge">Thread</code>…<br />
+So, assuming the activity has just been re-created, we could set the updated reference of the
+<code class="highlighter-rouge">ProgressBar</code> to the <code class="highlighter-rouge">BackgroundTask</code>. But we can’t have a reference on the <code class="highlighter-rouge">BackgroundTask</code>
+since it was only known from the previous activity. Well actually we save this reference in a
+singleton for example. But again no hacky solution is allowed.</p>
+
+<h2 id="a-solution">A solution</h2>
+
+<p>This post is about a solution to this common issue. There are other proper ways to tackle 
+this.</p>
+
+<p><strong>The idea</strong></p>
+
+<p>Instead of passing a reference of ui object to the <code class="highlighter-rouge">BackgroundTask</code>, the graphical elements
+will listen to messages coming from the running thread. So it doesn’t matter whether the activity
+or fragment is re-created or not, as long as they listen to the relevent messages. <br />
+No need to reinvent the weel, this is the publish/subscribe design pattern and a very good library
+available for Android is <a href="http://greenrobot.org/eventbus/">greenrobot’s EventBus</a>.</p>
+
+<p style="text-align: center;"><img src="/assets/simple_publish.jpg" alt="Simple publish" /></p>
+
+<p>For the rest of this post the publisher will be the background thread, and consumer will be a fragment. <br />
+Now let’s use more real world class example.</p>
+
+<p><strong>Background thread</strong></p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>public class DownloadTask extends Thread {
+    private String mUrlToDownload;
+    private File mOutputFile;
+    private UrlDownloadListener mUrlDownloadListener;
+
+    public DownloadTask(String urlToDownload, File outputFile, UrlDownloadListener listener) {
+        mUrlToDownload = urlToDownload;
+        mOutputFile = outputFile;
+        mUrlDownloadListener = listener;
+    }
+
+    @Override
+    public void run() {
+        int percentProgress = 0;
+        try {
+            URL url = new URL(mUrlToDownload);
+            URLConnection connection = url.openConnection();
+            connection.connect();
+            /* This will be useful so that you can show a typical 0-100% progress bar */
+            int fileLength = connection.getContentLength();
+
+            /* Download the file */
+            InputStream input = new BufferedInputStream(connection.getInputStream());
+            OutputStream output = new FileOutputStream(mOutputFile);
+
+            byte data[] = new byte[1024];
+            long total = 0;
+            int count;
+            while ((count = input.read(data)) != -1) {
+                total += count;
+                output.write(data, 0, count);
+
+                /* Publishing the progress... */
+                percentProgress = (int) (total * 100 / fileLength);
+                mUrlDownloadListener.onDownloadProgress(percentProgress);
+            }
+
+            output.flush();
+            output.close();
+            input.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        if (percentProgress != 100) {
+            //TODO : alert user, send an error signal to the receiver.
+        }
+    }
+
+    public interface UrlDownloadListener {
+        void onDownloadProgress(int percent);
+    }
+}
+</code></pre>
+</div>
+
+<p><strong>The fragment</strong></p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
+
+public class DownloadDialog extends DialogFragment {
+    private ProgressBar mProgressBar;
+
+    /* Constructor and component init ... */
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onProgressEvent(UrlDownloadEvent event) {
+        mProgressBar.setProgress(event.percentProgress);
+
+        if (event.percentProgress == 100) {
+            dismiss();
+        }
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        EventBus.getDefault().register(this);
+    }
+
+    @Override
+    public void onStop() {
+        EventBus.getDefault().unregister(this);
+        super.onStop();
+    }
+}
+</code></pre>
+</div>
+
+<p><strong>Somewhere in a controler (parent fragment, activity…)</strong></p>
+<div class="highlighter-rouge"><pre class="highlight"><code>DownloadTask downloadTask = new DownloadTask(url, outputFile, new DownloadTask.UrlDownloadListener() {
+    @Override
+    public void onDownloadProgress(int percent) {
+        EventBus.getDefault().post(new UrlDownloadEvent(percent));
+    }
+});
+downloadTask.start();
+</code></pre>
+</div>
+
+<p>Now let me explain the code structure. The key points are :</p>
+
+<ul>
+  <li>No <code class="highlighter-rouge">EventBus</code> dependency in <code class="highlighter-rouge">DownloadTask</code> – use of listener pattern instead.</li>
+  <li>The component that launches the <code class="highlighter-rouge">DownloadTask</code> creates a <code class="highlighter-rouge">DownloadTask.UrlDownloadListener</code> that uses
+the <code class="highlighter-rouge">EventBus</code>. <br />
+This allows the <code class="highlighter-rouge">DownloadTask</code> to ba agnostic of how progress flows into the application and improves
+reusability of this code.</li>
+  <li>The <code class="highlighter-rouge">DownloadDialog</code> fragment subscribes to the <code class="highlighter-rouge">EventBus</code> in its <code class="highlighter-rouge">onStart</code> and unsubscribes in its
+<code class="highlighter-rouge">onStop</code> method.<br />
+This is very important to unsubscribe, to avoid memory leak.</li>
+</ul>
+
+<p>And that’s it. The screen can be rotated during the progress, the fragment’s <code class="highlighter-rouge">ProgressBar</code> will continue
+to show the progression.</p>
+
+
+
+      <footer class="site-footer">
+        
+          <span class="site-footer-owner"><a href="http://github.com/peterLaurence/peterLaurence.github.io">peterLaurence.github.io</a> is maintained by <a href="http://github.com/peterLaurence">peterLaurence</a>.</span>
+        
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a>.</span>
+      </footer>
+    </section>
+
+    
+  </body>
+</html>
