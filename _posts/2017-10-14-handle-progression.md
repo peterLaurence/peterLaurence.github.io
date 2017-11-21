@@ -92,7 +92,7 @@ a background service and a broadcast receiver for example. But what if we want t
 simple, and not rely on services which are very resource demanding compared to bare `Thread`...<br>
 So, assuming the activity has just been re-created, we could set the updated reference of the
 `ProgressBar` to the `BackgroundTask`. But we can't have a reference on the `BackgroundTask`
-since it was only known from the previous activity. Well actually we save this reference in a
+since it was only known from the previous activity. Well actually we could save this reference in a
 singleton for example. But again no hacky solution is allowed.
 
 
@@ -226,7 +226,7 @@ Now let me explain the code structure. The key points are :
 * No `EventBus` dependency in `DownloadTask` -- use of listener pattern instead.
 * The component that launches the `DownloadTask` creates a `DownloadTask.UrlDownloadListener` that uses
   the `EventBus`. <br>
-  This allows the `DownloadTask` to ba agnostic of how progress flows into the application and improves
+  This allows the `DownloadTask` to be agnostic of how progress flows into the application and improves
   reusability of this code.
 * The `DownloadDialog` fragment subscribes to the `EventBus` in its `onStart` and unsubscribes in its
   `onStop` method.<br>
